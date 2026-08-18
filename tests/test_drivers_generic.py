@@ -228,6 +228,23 @@ def test_classify_maps_integrity_error_to_permanent(engine, driver):
             assert driver.classify(exc) is ErrorClass.PERMANENT
 
 
+def test_classify_unwraps_pandas_database_error_to_find_integrity_error(engine, driver):
+    # pandas.to_sql wraps the real SQLAlchemy IntegrityError in its own
+    # pandas.errors.DatabaseError — classify() must see through that.
+    with engine.connect() as connection:
+        connection.execute(text("CREATE TABLE t (id INTEGER PRIMARY KEY)"))
+        connection.commit()
+
+    df = pd.DataFrame({"id": [1, 1]})
+    with engine.connect() as connection, connection.begin():
+        try:
+            df.to_sql("t", connection, if_exists="append", index=False)
+            pytest.fail("expected a duplicate primary key to raise")
+        except Exception as exc:
+            assert type(exc).__name__ == "DatabaseError"
+            assert driver.classify(exc) is ErrorClass.PERMANENT
+
+
 def test_classify_maps_programming_error_to_permanent(driver):
     # Unit-tested directly on the exception type rather than by triggering
     # one through a live SQLite query: sqlite3 reports almost every SQL

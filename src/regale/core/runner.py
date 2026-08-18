@@ -8,9 +8,31 @@ from sqlalchemy.engine import Connection
 from regale.api.config import configure
 from regale.core.pipeline import Pipeline
 from regale.core.registry import registry
+from regale.core.retry import RetryPolicy, run_with_retry
 from regale.core.steps import LoadStep
 from regale.drivers.base import Driver
 from regale.drivers.registry import resolve_driver
+
+
+def run_partition_with_retry(
+    pipeline_id: str, params: dict[str, Any], *, policy: RetryPolicy = RetryPolicy()
+) -> None:
+    """Like run_partition, but retries in-process on transient/ambiguous
+    failures with exponential backoff (core/retry.py). This is the
+    worker-local retry layer only — a crashed worker, as opposed to one
+    that merely raised, is handled by a distributed broker's own
+    at-least-once delivery (a later step), not by this function.
+
+    The failure is classified using the query's source driver. A load step
+    that fails against a different dialect could in principle need a
+    different SQLSTATE mapping; with only the generic driver available in
+    v1 this doesn't yet matter, since its classification is exception-type
+    based rather than dialect-specific.
+    """
+    entry = registry.get(pipeline_id)
+    pipeline = Pipeline.from_registration(entry)
+    driver = resolve_driver(configure.source(pipeline.query.source).url)
+    run_with_retry(lambda: _run(pipeline, params), classify=driver.classify, policy=policy)
 
 
 def run_partition(pipeline_id: str, params: dict[str, Any]) -> None:

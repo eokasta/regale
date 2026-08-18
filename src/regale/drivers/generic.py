@@ -102,8 +102,12 @@ class GenericDriver:
         connection.execute(text(f"DROP TABLE {full_staging}"))
 
     def classify(self, exc: Exception) -> ErrorClass:
-        if isinstance(exc, ProgrammingError | IntegrityError):
-            return ErrorClass.PERMANENT
+        # pandas.to_sql wraps the real SQLAlchemy exception in its own
+        # pandas.errors.DatabaseError, hiding it from a plain isinstance
+        # check — walk __cause__/__context__ to find the original.
+        for candidate in _exception_chain(exc):
+            if isinstance(candidate, ProgrammingError | IntegrityError):
+                return ErrorClass.PERMANENT
         # Anything else, including OperationalError, is AMBIGUOUS rather than
         # TRANSIENT: that class spans both connection-level transients
         # (timeout, connection reset, lock contention) and, on some DBAPIs —
@@ -112,3 +116,12 @@ class GenericDriver:
         # exception type alone; a native driver (postgres.py) resolves this
         # properly using the backend's own SQLSTATE code.
         return ErrorClass.AMBIGUOUS
+
+
+def _exception_chain(exc: BaseException) -> Iterator[BaseException]:
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        yield current
+        current = current.__cause__ or current.__context__
