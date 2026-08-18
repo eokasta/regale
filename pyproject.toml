@@ -15,6 +15,9 @@ dependencies = [
 ]
 license = "Apache-2.0"
 
+[project.scripts]
+regale = "regale.cli:app"
+
 [project.optional-dependencies]
 redis = ["redis>=5"]
 postgres = ["adbc-driver-postgresql>=1.0", "adbc-driver-manager>=1.0"]
