@@ -1,7 +1,7 @@
 [project]
 name = "regale"
 version = "0.1.0"
-description = "Add your description here"
+description = "Modular, horizontally and vertically scalable ETL framework for Python, with native pandas integration and independently configurable query/transform/load workers."
 readme = "README.md"
 authors = [
     { name = "Lucas Monteiro", email = "lucasmontmsantos@gmail.com" }
