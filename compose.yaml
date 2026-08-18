@@ -1,0 +1,68 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  origem:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: regale
+      POSTGRES_PASSWORD: regale
+      POSTGRES_DB: vendas
+    ports:
+      - "5433:5432" # host-only, for manual inspection with psql/DBeaver
+    volumes:
+      - ./docker/seed/01-origem.sql:/docker-entrypoint-initdb.d/01-origem.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U regale -d vendas"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  destino:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: regale
+      POSTGRES_PASSWORD: regale
+      POSTGRES_DB: dw
+    ports:
+      - "5434:5432"
+    volumes:
+      - ./docker/seed/01-destino.sql:/docker-entrypoint-initdb.d/01-destino.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U regale -d dw"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # No fixed container name or host port here — both would break `--scale`.
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    environment:
+      REGALE_PIPELINES: examples.vendas
+      REGALE_BROKER: redis://redis:6379/0
+      VENDAS_DB_URL: postgresql+psycopg://regale:regale@origem:5432/vendas
+      DW_URL: postgresql+psycopg://regale:regale@destino:5432/dw
+    volumes:
+      - ./src:/app/src
+      - ./examples:/app/examples
+    depends_on:
+      redis:
+        condition: service_healthy
+      origem:
+        condition: service_healthy
+      destino:
+        condition: service_healthy
+    # Deliberately no `restart:` — a crashed worker should be visible while
+    # developing, not silently relaunched.

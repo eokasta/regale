@@ -20,7 +20,7 @@ regale = "regale.cli:app"
 
 [project.optional-dependencies]
 redis = ["redis>=5"]
-postgres = ["adbc-driver-postgresql>=1.0", "adbc-driver-manager>=1.0"]
+postgres = ["psycopg[binary]>=3.1", "adbc-driver-postgresql>=1.0", "adbc-driver-manager>=1.0"]
 all = ["regale[redis,postgres]"]
 
 [build-system]

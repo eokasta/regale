@@ -1,0 +1,18 @@
+FROM python:3.12-slim
+
+RUN pip install --no-cache-dir uv
+
+WORKDIR /app
+
+# Dependencies in their own layer so editing pipeline code doesn't bust the
+# dependency-install cache — only pyproject.toml/uv.lock changes should.
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --extra redis --extra postgres --no-install-project
+
+COPY src ./src
+COPY examples ./examples
+RUN uv sync --frozen --no-dev --extra redis --extra postgres
+
+ENV PATH="/app/.venv/bin:${PATH}"
+
+CMD ["regale", "worker", "--stream", "vendas-tasks"]
