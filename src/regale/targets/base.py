@@ -1,9 +1,10 @@
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.engine.url import make_url
+
+from regale.core.engines import build_engine
 
 
 class Target(Protocol):
@@ -27,10 +28,9 @@ class SQLTarget:
 
     def engine(self) -> Engine:
         if self._engine is None:
-            kwargs: dict[str, Any] = {"connect_args": self.connect_args}
-            if not self.url.startswith("sqlite"):
-                kwargs["pool_size"] = self.pool_size
-            self._engine = create_engine(self.url, **kwargs)
+            self._engine = build_engine(
+                self.url, pool_size=self.pool_size, connect_args=self.connect_args
+            )
         return self._engine
 
     def __repr__(self) -> str:

@@ -63,14 +63,21 @@ def load(
     table: str,
     mode: str,
     keys: Iterable[str] = (),
+    partition_keys: Iterable[str] = (),
     commit_every: int | None = None,
 ) -> Callable[[F], F]:
     """Register the load step of a pipeline.
 
     mode="upsert" requires keys, since retry safety depends on knowing which
-    columns identify a row for conflict resolution. mode="append" combined
-    with commit_every is rejected: a worker crash mid-partition would leave
-    already-committed chunks in place, and a retry would duplicate them.
+    columns identify a row for conflict resolution. mode="replace_partition"
+    requires partition_keys: the destination columns, matched by name
+    against the partition's own params, that identify which rows to delete
+    before inserting. Only equality predicates are supported in v1 — a
+    range partition (e.g. inicio/fim date bounds) needs a destination column
+    that holds the exact partition value (such as "ano"), not the bounds
+    themselves. mode="append" combined with commit_every is rejected: a
+    worker crash mid-partition would leave already-committed chunks in
+    place, and a retry would duplicate them.
     """
     try:
         load_mode = LoadMode(mode)
@@ -79,10 +86,18 @@ def load(
         raise RegistrationError(f"load mode must be one of {valid}, got {mode!r}") from exc
 
     resolved_keys = tuple(keys)
+    resolved_partition_keys = tuple(partition_keys)
     if load_mode is LoadMode.UPSERT and not resolved_keys:
         raise RegistrationError(
             f"pipeline {pipeline_id!r}: mode='upsert' requires keys=[...] to know "
             "which columns identify a row for conflict resolution"
+        )
+    if load_mode is LoadMode.REPLACE_PARTITION and not resolved_partition_keys:
+        raise RegistrationError(
+            f"pipeline {pipeline_id!r}: mode='replace_partition' requires "
+            "partition_keys=[...] — the destination columns matched against "
+            "the partition's own params that identify which rows to delete "
+            "before inserting"
         )
     if load_mode is LoadMode.APPEND and commit_every is not None:
         raise RegistrationError(
@@ -100,6 +115,7 @@ def load(
                 table=table,
                 mode=load_mode,
                 keys=resolved_keys,
+                partition_keys=resolved_partition_keys,
                 commit_every=commit_every,
             )
         )

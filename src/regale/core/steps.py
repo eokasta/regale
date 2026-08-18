@@ -41,4 +41,5 @@ class LoadStep:
     table: str
     mode: LoadMode
     keys: tuple[str, ...] = ()
+    partition_keys: tuple[str, ...] = ()
     commit_every: int | None = None

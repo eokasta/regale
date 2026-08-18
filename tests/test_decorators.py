@@ -97,6 +97,30 @@ def test_load_invalid_mode_raises():
             return df
 
 
+def test_load_replace_partition_requires_partition_keys():
+    with pytest.raises(RegistrationError, match="requires partition_keys"):
+
+        @regale.load("vendas", target="dw", table="fato_pedidos", mode="replace_partition")
+        def gravar(df, p):
+            return df
+
+
+def test_load_replace_partition_with_partition_keys_registers():
+    @regale.load(
+        "vendas",
+        target="dw",
+        table="fato_pedidos",
+        mode="replace_partition",
+        partition_keys=["ano"],
+    )
+    def gravar(df, p):
+        return df
+
+    entry = regale.registry.get("vendas")
+    assert entry.loads[0].partition_keys == ("ano",)
+    assert entry.loads[0].mode is LoadMode.REPLACE_PARTITION
+
+
 def test_partitions_registers_step():
     @regale.partitions("vendas")
     def por_ano(ctx):
